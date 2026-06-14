@@ -1,0 +1,26 @@
+# Generated .gitignore file for the project
+
+# Generative AI
+.claude/
+CLAUDE.md
+.codex/
+AGENTS.md
+
+# Node.js
+node_modules/
+
+# Python bytecode
+__pycache__/
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.*
+terraform/src/*.zip
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+terraform/*.tfvars.json
+
+# Other
+docs/tmp/
+.mcp.json
