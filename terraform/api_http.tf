@@ -27,6 +27,10 @@ resource "aws_apigatewayv2_stage" "http" {
   name        = "$default"
   auto_deploy = true
 
+  default_route_settings {
+    detailed_metrics_enabled = true
+  }
+
   tags = {
     Name    = "${var.project_name}-http-default"
     Project = var.project_name

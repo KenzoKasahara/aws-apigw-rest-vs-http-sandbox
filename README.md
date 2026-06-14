@@ -152,3 +152,4 @@ terraform destroy
 - **ウォームリクエスト時（curl 2〜10 回目）** は REST API が約 1.8 倍遅い（79.5 ms vs 44.7 ms）。HTTP API の軽量なアーキテクチャによるゲートウェイオーバーヘッドの差が curl レベルでも一貫して観測できる。
 - **CloudWatch Latency** は REST API が約 8.1 倍大きい（30.86 ms vs 3.8 ms）。HTTP API の IntegrationLatency はウォーム時にサブミリ秒となりメトリクスが欠落するため `GW overhead = Latency − IntegrationLatency` での比較は成立しない。それぞれ独立した Lambda 関数だが同一コードをデプロイしているため、Latency の直接比較がゲートウェイ速度差の証拠として機能する。
 - **Lambda の分離が比較の前提条件** であることが今回の計測で判明した。同一 Lambda を共有すると REST 計測が HTTP 計測のウォームアップになり、コールドスタートおよび IntegrationLatency の比較が成立しない。
+
