@@ -26,7 +26,7 @@ resource "aws_api_gateway_integration" "rest_lambda" {
   http_method             = aws_api_gateway_method.rest_any.http_method
   type                    = "AWS_PROXY"
   integration_http_method = "POST"
-  uri                     = aws_lambda_function.backend.invoke_arn
+  uri                     = aws_lambda_function.rest_backend.invoke_arn
 }
 
 resource "aws_api_gateway_deployment" "rest" {
@@ -48,7 +48,7 @@ resource "aws_api_gateway_stage" "rest" {
 resource "aws_lambda_permission" "rest" {
   statement_id  = "AllowRestAPI"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.backend.function_name
+  function_name = aws_lambda_function.rest_backend.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.rest.execution_arn}/*/*"
 }

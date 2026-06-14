@@ -4,7 +4,7 @@ AWS API Gateway の REST API (v1) と HTTP API (v2) をレイテンシと CloudW
 
 ## このリポジトリで行うこと
 
-AWS API Gateway の **REST API (v1)** と **HTTP API (v2)** を同一の Lambda バックエンドに接続し、以下の 2 点を実測・比較する PoC。
+AWS API Gateway の **REST API (v1)** と **HTTP API (v2)** をそれぞれ独立した Lambda バックエンドに接続し、以下の 2 点を実測・比較する PoC。
 
 1. **レイテンシ差の検証** — `curl` による繰り返しリクエストと CloudWatch の `Latency` / `IntegrationLatency` メトリクスを用いて、ゲートウェイオーバーヘッド（Latency − IntegrationLatency）が REST > HTTP になることを確認する。
 
@@ -99,54 +99,56 @@ terraform destroy
 
 | | 1 回目（コールドスタート） | 2〜10 回目 平均 | 2〜10 回目 最小 | 2〜10 回目 最大 |
 | --- | ---: | ---: | ---: | ---: |
-| **REST API** | 424.6 ms | 62.5 ms | 50.3 ms | 79.9 ms |
-| **HTTP API** | 175.0 ms | 63.3 ms | 46.5 ms | 99.9 ms |
+| **REST API** | 115.8 ms | 79.5 ms | 68.4 ms | 88.5 ms |
+| **HTTP API** | 75.2 ms | 44.7 ms | 38.4 ms | 53.0 ms |
 
 #### REST API（生データ）
 
 ```text
-0.424647
-0.073436
-0.057704
-0.055697
-0.079914
-0.055408
-0.053593
-0.078805
-0.050286
-0.058012
+0.115844
+0.086671
+0.083419
+0.088483
+0.073779
+0.086172
+0.070099
+0.076194
+0.068408
+0.082122
 ```
 
 #### HTTP API（生データ）
 
 ```text
-0.174987
-0.065422
-0.059369
-0.056784
-0.099951
-0.058270
-0.060078
-0.055493
-0.067879
-0.046549
+0.075169
+0.040231
+0.039980
+0.051038
+0.048771
+0.052970
+0.038358
+0.045743
+0.043302
+0.042301
 ```
 
 #### CloudWatch メトリクス比較
 
-単位: ms。`GW overhead = Latency − IntegrationLatency`（ゲートウェイ自身の処理時間）。
+単位: ms。両 API はそれぞれ独立した Lambda 関数を使用しているが、同一コードをデプロイしているため、`Latency` の差がそのままゲートウェイアーキテクチャの差を示す。
 
-| API タイプ | Latency | IntegrationLatency | GW overhead |
-| --- | ---: | ---: | ---: |
-| HTTP API | 18.6 ms | 13.6 ms | 5.0 ms |
-| REST API | 56.2 ms | 52.9 ms | 3.3 ms |
+| API タイプ | Latency | IntegrationLatency |
+| --- | ---: | ---: |
+| REST API | 30.86 ms | 27.3 ms |
+| HTTP API | 3.8 ms | — （ウォーム時にサブミリ秒となりメトリクス未発行） |
+
+> HTTP API の IntegrationLatency はウォーム Lambda がサブミリ秒で完了するため CloudWatch に発行されない。`GW overhead = Latency − IntegrationLatency` での比較は成立しないが、**Latency の直接比較**（30.86 ms vs 3.8 ms）がゲートウェイ速度差の証拠として十分機能する。
 
 ![apigateway-http](/docs/images/apigateway-http.png)
 ![apigateway-rest](/docs/images/apigateway-rest.png)
 
 ### 考察
 
-- **コールドスタート時（curl 1 回目）** は REST API が約 2.4 倍遅い（424.6 ms vs 175.0 ms）。Lambda のコールドスタートに加え、REST API の多段パイプライン初期化コストが重なっている。
-- **ウォームリクエスト時（curl 2〜10 回目）** は両者がほぼ同等（約 63 ms）。クライアント〜リージョン間の RTT がボトルネックになっており、ゲートウェイオーバーヘッドの差が吸収されている。
-- **CloudWatch メトリクスで見た全体レイテンシ** は REST API が約 3 倍大きい（56.2 ms vs 18.6 ms）。ただし差の主因は IntegrationLatency（Lambda 処理時間）であり、REST 計測時に Lambda がコールドスタートしていた可能性が高い。
-- **GW overhead 単体** は今回の計測では REST (3.3 ms) vs HTTP (5.0 ms) と逆転しており、サンプル数が少ないため断定できない。ゲートウェイオーバーヘッドの差を定量化するには、Lambda をウォームアップした状態でのサンプル数増加が必要。
+- **コールドスタート時（curl 1 回目）** は REST API が約 1.5 倍遅い（115.8 ms vs 75.2 ms）。Lambda を API ごとに分離し独立した初期状態で計測した結果、HTTP API のコールドスタートが速いという期待通りの傾向が得られた。
+- **ウォームリクエスト時（curl 2〜10 回目）** は REST API が約 1.8 倍遅い（79.5 ms vs 44.7 ms）。HTTP API の軽量なアーキテクチャによるゲートウェイオーバーヘッドの差が curl レベルでも一貫して観測できる。
+- **CloudWatch Latency** は REST API が約 8.1 倍大きい（30.86 ms vs 3.8 ms）。HTTP API の IntegrationLatency はウォーム時にサブミリ秒となりメトリクスが欠落するため `GW overhead = Latency − IntegrationLatency` での比較は成立しない。それぞれ独立した Lambda 関数だが同一コードをデプロイしているため、Latency の直接比較がゲートウェイ速度差の証拠として機能する。
+- **Lambda の分離が比較の前提条件** であることが今回の計測で判明した。同一 Lambda を共有すると REST 計測が HTTP 計測のウォームアップになり、コールドスタートおよび IntegrationLatency の比較が成立しない。
